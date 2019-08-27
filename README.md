@@ -1,3 +1,6 @@
+[![Build Status](https://travis-ci.org/rgerganov/py-air-control.svg?branch=master)](https://travis-ci.org/rgerganov/py-air-control)
+[![PyPI version](https://badge.fury.io/py/py-air-control.svg)](https://badge.fury.io/py/py-air-control)
+
 Command line application for controlling Philips air purifiiers.
 
 It is tested with AC2729 and AC2889 models but it should work with all purifiers made by Philips.
@@ -43,6 +46,10 @@ You can change settings by using the prefix in the square brackets as a command 
 For example to set fan speed 2:
 
     $ airctrl 192.168.0.17 --om 2
+
+For AC2889 you may need to specify both manual mode *and* fan speed:
+
+    $ airctrl 192.168.0.17 --mode M --om 2
 
 Set target humidity to 50%:
 

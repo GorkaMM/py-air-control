@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from Crypto.Cipher import AES
+from Crypto.Util.Padding import pad, unpad
 import urllib.request
 import base64
 import binascii
@@ -20,11 +21,9 @@ def aes_decrypt(data, key):
     return cipher.decrypt(data)
 
 def encrypt(values, key):
-    pad = lambda s: s + (16 - len(s) % 16) * chr(16 - len(s) % 16)
     # add two random bytes in front of the body
     data = 'AA' + json.dumps(values)
-    data = pad(data)
-    data = data.encode('ascii')
+    data = pad(bytearray(data, 'ascii'), 16, style='pkcs7')
     iv = bytes(16)
     cipher = AES.new(key, AES.MODE_CBC, iv)
     data_enc = cipher.encrypt(data)
@@ -32,11 +31,10 @@ def encrypt(values, key):
 
 def decrypt(data, key):
     payload = base64.b64decode(data)
+    data = aes_decrypt(payload, key)
     # response starts with 2 random bytes, exclude them
-    plain_bytes = aes_decrypt(payload, key)[2:]
-    plain = plain_bytes.decode('ascii')
-    # filter non-ascii chars used for AES padding
-    return ''.join([x for x in plain if ord(x)>=32 and ord(x)<127])
+    response = unpad(data, 16, style='pkcs7')[2:]
+    return response.decode('ascii')
 
 class AirClient(object):
 
@@ -92,11 +90,14 @@ class AirClient(object):
         body = encrypt(values, self._session_key)
         url = 'http://{}/di/v1/products/1/air'.format(self._host)
         req = urllib.request.Request(url=url, data=body, method='PUT')
-        with urllib.request.urlopen(req) as response:
-            resp = response.read()
-            resp = decrypt(resp.decode('ascii'), self._session_key)
-            status = json.loads(resp)
-            self._dump_status(status, use_json=use_json, debug=debug)
+        try:
+            with urllib.request.urlopen(req) as response:
+                resp = response.read()
+                resp = decrypt(resp.decode('ascii'), self._session_key)
+                status = json.loads(resp)
+                self._dump_status(status, use_json=use_json, debug=debug)
+        except urllib.error.HTTPError as e:
+            print("Error setting values (response code: {})".format(e.code))
 
     def set_wifi(self, ssid, pwd):
         values = {}
@@ -164,7 +165,7 @@ class AirClient(object):
             print('[func]  Function: {}'.format(func))
         if 'mode' in status:
             mode = status['mode']
-            mode_str = {'P': 'auto', 'A': 'allergen', 'S': 'sleep',  'M': 'manual', 'B': 'bacteria'}
+            mode_str = {'P': 'auto', 'A': 'allergen', 'S': 'sleep', 'M': 'manual', 'B': 'bacteria', 'N': 'night'}
             mode = mode_str.get(mode, mode)
             print('[mode]  Mode: {}'.format(mode))
         if 'om' in status:
@@ -239,7 +240,7 @@ def main():
     parser.add_argument('-j', '--json', help='use json-only output', action='store_true')
     parser.add_argument('--om', help='set fan speed', choices=['1','2','3','s','t'])
     parser.add_argument('--pwr', help='power on/off', choices=['0','1'])
-    parser.add_argument('--mode', help='set mode', choices=['P','A','S','M','B'])
+    parser.add_argument('--mode', help='set mode', choices=['P','A','S','M','B','N'])
     parser.add_argument('--rhset', help='set target humidity', choices=['40','50','60','70'])
     parser.add_argument('--func', help='set function', choices=['P','PH'])
     parser.add_argument('--aqil', help='set light brightness', choices=['0','25','50','75','100'])
